@@ -350,15 +350,15 @@ int main(int argc, char **argv)
     }
 
     // Guardar dados de argv em suas variáveis correspondentes
-    strcpy(filename, argv[1]);
-    strcpy(outputPath, argv[2]);
-    p = atoi(argv[3]);
-    nSVX = atoi(argv[4]);
-    imgPorBloco = atoi(argv[5]);
-    imgPorIntersecao = atoi(argv[6]);
-    typeOfColoring = atoi(argv[7]);
-    propagatedMoreLabels = atoi(argv[8]);
-    rateStopDecrement = (float) atoi(argv[9]) / 100.0;
+    strcpy(filename, argv[1]); // ./datasets/soccer
+    strcpy(outputPath, argv[2]); // output/soccer // output2/soccer
+    p = atoi(argv[3]); // 5000
+    nSVX = atoi(argv[4]); // 300
+    imgPorBloco = atoi(argv[5]); // 30 // 100
+    imgPorIntersecao = atoi(argv[6]); // 1
+    typeOfColoring = atoi(argv[7]); // 0
+    propagatedMoreLabels = atoi(argv[8]); // 1
+    rateStopDecrement = (float) atoi(argv[9]) / 100.0; // 50
 
     nSVXcomputed = 0, k = 0;
 
@@ -477,16 +477,17 @@ int main(int argc, char **argv)
         }
 
         //==========================================================================
-        // ALTERAÇÃO
+        // ALTERAÇÃO NO DISF
         //==========================================================================
 
         // Alocação de memória para o array de ponteiros de imagens 'video'
         video = new Image*[frames];
+
+        // Condicional verifica se alocação de memória foi bem sucedida
         if (video == nullptr) {
             fprintf(stderr, "Erro ao alocar memória para video\n");
             exit(1);
         }
-        // Condicional verifica se alocação de memória foi bem sucedida
 
         // Alocação de memória para o array de ponteiros de imagens 'label_video'
         label_video = new Image*[frames];
@@ -504,9 +505,11 @@ int main(int argc, char **argv)
         // Ler e armazenar as imagens do bloco atual na variável 'video'
         while (i < frames && imgFrames <= num_frames)
         {
+            //printf("imgFrames: %d\n", imgFrames);
             frame_id = imgFrames;
 
             sprintf(filepath, "%s/%05d.ppm", filename, frame_id);
+            //sprintf(filepath, "%s/frame%d.ppm", filename, frame_id);
             imgD = loadImage(filepath);
 
             border_img = createImage(imgD->num_rows, imgD->num_cols, 1);
@@ -517,80 +520,125 @@ int main(int argc, char **argv)
                 exit(1);
             }
 
-            // Verificar se o índice i está dentro dos limites do array
-            if (i < frames) {
-
-                // Alocar memória para o gráfico
-                graph = createGraph(imgD);
+            graph = createGraph(imgD);
                 
-                if (graph == nullptr) {
-                    fprintf(stderr, "Erro ao alocar memória para graph\n");
-                    Liberar_Video(video, frames, num_pixels);
-                    exit(1);
-                }
-
-                if (i < frames) {
-
-                    // Alocar memória para o label_video
-                    label_video[i] = runDISF(graph, p, k, &border_img);
-                    
-                    if (label_video[i] == nullptr) {
-                        fprintf(stderr, "Erro ao alocar memória para label_video[%d]\n", i);
-                        Liberar_Video(video, frames, num_pixels);
-                        Liberar_Video(label_video, frames, num_pixels);
-                        exit(1);
-                    }
-                }
+            if (graph == nullptr) {
+                fprintf(stderr, "Erro ao alocar memória para graph\n");
+                Liberar_Video(video, frames, num_pixels);
+                exit(1);
             }
 
-            // Incrementar os índices
-            i++;
-            imgFrames++;
-        }
-
-/*      PRIMEIRA TENTATIVA EM CIMA DO CÓDIGO ORIGINAL
-
-        // Inicializar label_video (Alteração)
-        label_video = new Image*[frames];
-        for (int i = 0; i < frames; i++) {
-            label_video[i] = nullptr; // Inicialize cada elemento como nulo
-        }
-
-        // Ler e armazenar as imagens do bloco atual na variavel video
-        while (i < frames && imgFrames <= num_frames)
-        {
-            
-            frame_id = imgFrames;
-            
-            sprintf(filepath, "%s/%05d.ppm", filename, frame_id);
-            //sprintf(filepath, "%s/frame%d.ppm", filename, frame_id);
-            imgD = loadImage(filepath);
-
-            border_img = createImage(imgD->num_rows, imgD->num_cols, 1);
-
-            video[i] = imgD;
-            video_border[i] = border_img;
-            i++;
-            imgFrames++;
-
-            // (graph e label_video foram movidas para dentro do loop
-            //  afim de que cada frame fosse segmentado separadamente)
-            graph = createGraph(video[i]);
-
             label_video[i] = runDISF(graph, p, k, &border_img);
-            //label_video[i] = runDISF(graph, p, k, NULL);
+                    
+            if (label_video[i] == nullptr) {
+                fprintf(stderr, "Erro ao alocar memória para label_video[%d]\n", i);
+                Liberar_Video(video, frames, num_pixels);
+                Liberar_Video(label_video, frames, num_pixels);
+                exit(1);
+            }
+            
+            /*
+            printf("Conteúdo de label_video[%d]:\n", i);
+            int cont = 0;
+            for (int row = 0; row < label_video[i]->num_rows; row++) {
+                int col = 0;
+                for (int col = 0; col < label_video[i]->num_cols; col++) {
+                    printf("%d ", label_video[i]->val[row][col]);
+                }
+                printf("\n");
+            }
+            printf("\n");
+            */
+
+            i++;
+            imgFrames++;
         }
+
+        //==========================================================================
+        // INTERSEÇÃO DOS FRAMES
+        //==========================================================================
+
+        //num_pixels = graph->num_rows * graph->num_cols;
+
+        // Criar um vetor para armazenar as interseções entre os frames consecutivos
+        Image **intersecoes = new Image *[frames - 1];
+        Image **diferenca = new Image *[frames - 1];
+
+        // Calcular a interseção entre cada par de frames consecutivos
+        for (i = 0; i < frames - 1; ++i)
+        {
+            int pos = 0; 
+            int neg = 0;
+
+            intersecoes[i] = createImage(graph->num_rows, graph->num_cols, 1);
+            diferenca[i] = createImage(graph->num_rows, graph->num_cols, 1);
+
+            for(int linha = 0; linha < label_video[i]->num_rows; linha++)
+            {
+                for(int coluna = 0; coluna < label_video[i]->num_cols; coluna++)
+                {
+                    int label_frame_atual = label_video[i]->val[linha][coluna];
+                    int label_proximo_frame = label_video[i + 1]->val[linha][coluna];
+               
+                    //if (label_video[i]->val[linha][coluna] == label_video[i + 1]->val[linha][coluna])
+                    if (label_frame_atual == label_proximo_frame)
+                    {
+                        //intersecoes[i]->val[linha][coluna] = label_video[i]->val[linha][coluna];
+                        intersecoes[i]->val[linha][coluna] = label_frame_atual;
+                        diferenca[i]->val[linha][coluna] = 0;
+                        //if (label_frame_atual != 0){
+                            pos++;
+                        //}
+                    }
+                    else{
+                        intersecoes[i]->val[linha][coluna] = 0;
+                        diferenca[i]->val[linha][coluna] = label_frame_atual;
+                        neg++;
+                    }
+                    
+               }
+            }
+
+            printf("%d - %d intersecoes e %d diferencas em %d pixels totais\n", i, pos, neg, (pos+neg));
+        }
+/*
+        // PRIMEIRA LINHA DOS FRAMES COMPARADOS PARA TESTAR A SAÍDA
+
+        for (int col = 0; col < label_video[0]->num_cols; col++) {
+            printf("%d ", label_video[0]->val[0][col]);
+        }
+        printf("\n");
+
+        for (int col = 0; col < label_video[1]->num_cols; col++) {
+            printf("%d ", label_video[1]->val[0][col]);
+        }
+        printf("\n");
+
+        for (int col = 0; col < intersecoes[0]->num_cols; col++) {
+            printf("%d ", intersecoes[0]->val[0][col]);
+        }
+        printf("\n");
+
+        for (int col = 0; col < intersecoes[0]->num_cols; col++) {
+            printf("%d ", diferenca[0]->val[0][col]);
+        }
+        printf("\n");
 */
+
+/*
+        // (CÓDIGO ORIGINAL)
+
         num_pixels = video[0]->num_rows * video[0]->num_cols;
-        //graph = createGraph(video, frames, 0);
+        graph = createGraph(video, frames, 0);
         
-//      intersection = newIntersection(k);
+        intersection = newIntersection(k);
+*/
 
         /*========================================================*/
         /*  Compute SUPERVOXEL          */
         /*========================================================*/
 /*
-        start = clock(); //
+        start = clock(); //      
         //label_video = runDISF(graph, p, k, 5, 1, 1, 1, NULL, 0);
         
         //printLabels(intersection);
