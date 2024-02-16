@@ -100,7 +100,7 @@ int getNormValue(Image *img)
 }
 
 //=============================================================================
-// Copiado de StreamISF original 
+// Adição do método (original do DISF para vídeos) 
 //=============================================================================
 Image *loadImage(char *filepath)
 {
